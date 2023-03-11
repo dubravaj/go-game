@@ -2,218 +2,145 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"math/rand"
 	"os"
 	"time"
 
+	"github.com/atamocius/gameloop"
 	"github.com/dubravaj/go-game/backend"
-	"github.com/gdamore/tcell"
+	"github.com/dubravaj/go-game/client"
+	"github.com/dubravaj/go-game/frontend"
+	"github.com/gdamore/tcell/v2"
 	"github.com/google/uuid"
 )
-
-// type Player struct {
-// 	X      int
-// 	Y      int
-// 	Xspeed int
-// 	Yspeed int
-// }
-
-// type Coords struct {
-// 	X int
-// 	Y int
-// }
-
-// func (p *Player) Display() string {
-// 	return "\u25CF"
-// }
-
-// func (p *Player) RightMove() {
-// 	p.X += p.Xspeed
-// }
-
-// func (p *Player) LeftMove() {
-// 	p.X -= p.Xspeed
-// }
-
-// func (p *Player) UpMove() {
-// 	p.Y -= p.Yspeed
-// }
-
-// func (p *Player) DownMove() {
-// 	p.Y += p.Yspeed
-// }
-
-func drawText(s tcell.Screen, x1, y1, x2, y2 int, style tcell.Style, text string) {
-	row := y1
-	col := x1
-	for _, r := range text {
-		s.SetContent(col, row, r, nil, style)
-		col++
-		if col >= x2 {
-			row++
-			col = x1
-		}
-		if row > y2 {
-			break
-		}
-	}
-}
 
 func main() {
 
 	game := backend.NewGame()
-
-	screen, err := tcell.NewScreen()
-	defStyle := tcell.StyleDefault.Background(tcell.ColorDefault).Foreground(tcell.ColorDefault)
-	if err != nil {
-		log.Fatalf("%+v", err)
-	}
-	if err := screen.Init(); err != nil {
-		log.Fatalf("%+v", err)
-	}
+	game.Init()
 
 	player := backend.Player{UUID: uuid.New(), CurrentPosition: backend.Coordinates{X: 27, Y: 14}, Icon: "\u25CF"}
 	game.AddPlayer(&player)
+	client := client.Client{Player: &player}
+	_ = client
 
-	genChan := make(chan backend.Coordinates)
-	timer := time.NewTimer(5 * time.Second)
-	go func(genChan chan backend.Coordinates, screen tcell.Screen, timer *time.Timer) {
-		for {
-			<-timer.C
-			width, height := screen.Size()
-			y := rand.Intn(height)
-			if y < 10 {
-				y += 10
-			}
-			if y == height-1 {
-				y -= 10
-			}
-			x := rand.Intn(width)
-			if x == 0 {
-				x += 10
-			}
-			if x == width-1 {
-				x -= 10
-			}
-			coords := backend.Coordinates{X: x, Y: y}
-			genChan <- coords
-			timer.Reset(5 * time.Second)
-			//time.Sleep(1000 * time.Millisecond)
-		}
+	config := gameloop.Config{
+		// TargetFPS is used to calculate the seconds per update
+		// (1 / TargetFPS).
+		TargetFPS: 60,
 
-	}(genChan, screen, timer)
+		// IdleThreshold prevents updating the game if the time
+		// elapsed since the previous frame exceeds this number (in seconds).
+		IdleThreshold: 1,
 
-	go func(screen tcell.Screen, player *backend.Player, genChan chan backend.Coordinates) {
-		var items []backend.Coordinates
-		for {
+		// CurrentTimeFunc accepts a function that returns the current time in
+		// seconds. The gameloop library only provides a scaffold, it is up to
+		// the user to provide an implementation. In this case, time's UnixNano
+		// method was used but had to be multiplied by 0.000000001 to convert
+		// to seconds.
+		CurrentTimeFunc: func() float64 {
+			return float64(time.Now().UnixNano()) * 1e-9
+		},
 
-			screen.Clear()
+		// ProcessInputFunc accepts a function that processes input logic
+		// (ie. keyboard, mouse, gamepad, etc.) and returns a flag to signal the
+		// game loop to quit.
+		ProcessInputFunc: func() bool {
+			width, height := game.Map.Size()
+			currentPosition := client.Player.Position()
+			switch event := game.Map.PollEvent().(type) {
+			case *tcell.EventResize:
+				game.Map.Sync()
+			case *tcell.EventKey:
+				switch event.Key() {
+				case tcell.KeyEscape:
+				case tcell.KeyCtrlC:
+					game.Map.Fini()
+					os.Exit(0)
+				case tcell.KeyUp:
+					if currentPosition.Y > 10 {
+						client.Player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y - 1})
+					}
+				case tcell.KeyDown:
+					if currentPosition.Y < height-2 {
+						client.Player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y + 1})
+					}
+				case tcell.KeyRight:
+					if currentPosition.X < width-2 {
+						client.Player.Move(backend.Coordinates{X: currentPosition.X + 1, Y: currentPosition.Y})
+					}
+				case tcell.KeyLeft:
+					if currentPosition.X >= 2 {
+						client.Player.Move(backend.Coordinates{X: currentPosition.X - 1, Y: currentPosition.Y})
+					}
+				}
+			}
+			return false
+		},
+		// UpdateFunc accepts a function that updates the game's state.
+		// This function will be called based on a fixed interval
+		// of 1 / TargetFPS (ie. 1 sec / 60 FPS = 0.01667 secs) and it is passed
+		// as a parameter (dt).
+		UpdateFunc: func(dt float64) {
+		},
+
+		// RenderFunc accepts a function that contains rendering logic.
+		RenderFunc: func() {
+
+			game.Map.Clear()
 			defStyle := tcell.StyleDefault.Background(tcell.ColorDefault).Foreground(tcell.ColorDefault)
-			screen.SetStyle(defStyle)
-			width, height := screen.Size()
+			game.Map.SetStyle(defStyle)
+			width, height := game.Map.Size()
 
 			text := "Welcome to the game"
-			drawText(screen, 5, 3, len(text)+5, 3, defStyle, text)
+			frontend.DrawText(game.Map, 5, 3, len(text)+5, 3, defStyle, text)
 
 			i := 0
 			for _, score := range game.Score {
-				drawText(screen, 5, 5, len(text)+5, 5, defStyle, fmt.Sprintf("Player %d score: ", i))
-				drawText(screen, 18, 5, len(text)+1, 5, defStyle, fmt.Sprintf("%d", score))
+				frontend.DrawText(game.Map, 5, 5, len(text)+5, 5, defStyle, fmt.Sprintf("Player %d score: ", i))
+				frontend.DrawText(game.Map, 22, 5, len(text)+1, 5, defStyle, fmt.Sprintf("%d", score))
 				i++
 			}
-			//drawText(screen, 13, 5, len(text)+1, 5, defStyle, string())
 
-			screen.SetContent(0, 9, tcell.RuneULCorner, nil, defStyle)
-			screen.SetContent(0, height-1, tcell.RuneLLCorner, nil, defStyle)
-			screen.SetContent(width-1, 9, tcell.RuneURCorner, nil, defStyle)
-			screen.SetContent(width-1, height-1, tcell.RuneLRCorner, nil, defStyle)
+			game.Map.SetContent(0, 9, tcell.RuneULCorner, nil, defStyle)
+			game.Map.SetContent(0, height-1, tcell.RuneLLCorner, nil, defStyle)
+			game.Map.SetContent(width-1, 9, tcell.RuneURCorner, nil, defStyle)
+			game.Map.SetContent(width-1, height-1, tcell.RuneLRCorner, nil, defStyle)
 			for i := 0; i < width; i++ {
 				if i == 0 || i == width-1 {
 					for j := 10; j < height-1; j++ {
-						screen.SetContent(i, j, tcell.RuneVLine, nil, defStyle)
+						game.Map.SetContent(i, j, tcell.RuneVLine, nil, defStyle)
 					}
 				} else {
 
-					screen.SetContent(i, 9, tcell.RuneHLine, nil, defStyle)
-					screen.SetContent(i, height-1, tcell.RuneHLine, nil, defStyle)
+					game.Map.SetContent(i, 9, tcell.RuneHLine, nil, defStyle)
+					game.Map.SetContent(i, height-1, tcell.RuneHLine, nil, defStyle)
 				}
 			}
 
-			screen.SetContent(20, 10, tcell.RuneHLine, nil, defStyle)
-			screen.SetContent(21, 10, tcell.RuneHLine, nil, defStyle)
-			screen.SetContent(22, 10, tcell.RuneHLine, nil, defStyle)
-			screen.SetContent(23, 10, tcell.RuneURCorner, nil, defStyle)
-			screen.SetContent(23, 11, tcell.RuneVLine, nil, defStyle)
-
-			for _, r := range player.Icon {
-				currentPosition := player.CurrentPosition
-				screen.SetContent(currentPosition.X, currentPosition.Y, r, nil, defStyle)
-			}
-
-			for _, items := range items {
-				screen.SetContent(items.X, items.Y, 'X', nil, defStyle)
-			}
-
-			go func(items *[]backend.Coordinates, genChan chan backend.Coordinates) {
-				coord := <-genChan
-				*items = append(*items, coord)
-			}(&items, genChan)
-
-			screen.Show()
-
-			time.Sleep(40 * time.Millisecond)
-		}
-
-	}(screen, &player, genChan)
-
-	ox, oy := -1, -1
-	for {
-
-		switch event := screen.PollEvent().(type) {
-		case *tcell.EventResize:
-			screen.Sync()
-		case *tcell.EventKey:
-			switch event.Key() {
-			case tcell.KeyEscape:
-			case tcell.KeyCtrlC:
-				screen.Fini()
-				os.Exit(0)
-			case tcell.KeyUp:
-				currentPosition := player.CurrentPosition
-				player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y - 1})
-			case tcell.KeyDown:
-				currentPosition := player.CurrentPosition
-				player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y + 1})
-			case tcell.KeyRight:
-				currentPosition := player.CurrentPosition
-				player.Move(backend.Coordinates{X: currentPosition.X + 1, Y: currentPosition.Y})
-			case tcell.KeyLeft:
-				currentPosition := player.CurrentPosition
-				player.Move(backend.Coordinates{X: currentPosition.X - 1, Y: currentPosition.Y})
-			case tcell.KeyCtrlD:
-				screen.SetContent(15, 15, 'W', nil, defStyle)
-			}
-		case *tcell.EventMouse:
-			x, y := event.Position()
-			switch event.Buttons() {
-
-			case tcell.Button1, tcell.Button2:
-				fmt.Println("HERE")
-				if ox < 0 {
-					ox, oy = x, y
+			for _, entity := range game.Entities {
+				displayerEntity, ok := entity.(backend.Diplayer)
+				if !ok {
+					continue
 				}
-			case tcell.ButtonNone:
-				if ox >= 0 {
-					screen.SetContent(ox, oy, 'W', nil, tcell.StyleDefault.Background(tcell.ColorDefault).Foreground(tcell.ColorDefault))
-					fmt.Println("Click")
-					ox, oy = -1, -1
+				for _, r := range displayerEntity.Display() {
+					currentPosition := displayerEntity.Position()
+					game.Map.SetContent(currentPosition.X, currentPosition.Y, r, nil, defStyle)
 				}
 
 			}
 
-		}
-
+			game.Map.Show()
+		},
 	}
+
+	// Call the gameloop.Create() function and pass the config to create
+	// a game loop.
+	runLoop := gameloop.Create(config)
+
+	// generate food
+	go game.GenerateFood()
+
+	// Run the created game loop.
+	runLoop()
 
 }
