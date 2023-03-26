@@ -17,7 +17,7 @@ func main() {
 	game := backend.NewGame()
 	game.Init()
 
-	player := backend.Player{UUID: uuid.New(), CurrentPosition: backend.Coordinates{X: 27, Y: 14}, Icon: "\u25CF"}
+	player := backend.Player{UUID: uuid.New(), Icon: "\u25CF"}
 	game.AddPlayer(&player)
 
 	for i := 0; i < 10; i++ {
@@ -48,6 +48,7 @@ func main() {
 		ProcessInputFunc: func() bool {
 			width, height := game.Map.Size()
 			currentPosition := player.Position()
+			var moveAction backend.Action
 			switch event := game.Map.PollEvent().(type) {
 			case *tcell.EventResize:
 				game.Map.Sync()
@@ -59,21 +60,25 @@ func main() {
 					os.Exit(0)
 				case tcell.KeyUp:
 					if currentPosition.Y > 10 {
-						player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y - 1})
+						moveAction = backend.MoveAction{ID: player.UUID, Direction: backend.Up}
 					}
 				case tcell.KeyDown:
 					if currentPosition.Y < height-2 {
-						player.Move(backend.Coordinates{X: currentPosition.X, Y: currentPosition.Y + 1})
+						moveAction = backend.MoveAction{ID: player.UUID, Direction: backend.Down}
+
 					}
 				case tcell.KeyRight:
 					if currentPosition.X < width-2 {
-						player.Move(backend.Coordinates{X: currentPosition.X + 1, Y: currentPosition.Y})
+						moveAction = backend.MoveAction{ID: player.UUID, Direction: backend.Right}
 					}
 				case tcell.KeyLeft:
 					if currentPosition.X >= 2 {
-						player.Move(backend.Coordinates{X: currentPosition.X - 1, Y: currentPosition.Y})
+						moveAction = backend.MoveAction{ID: player.UUID, Direction: backend.Left}
 					}
 				}
+				go func(action backend.Action) {
+					game.ActionsChan <- moveAction
+				}(moveAction)
 			}
 			return false
 		},
@@ -83,28 +88,32 @@ func main() {
 		// as a parameter (dt).
 		UpdateFunc: func(dt float64) {
 
-			var removedEntities []backend.Identifier
+			go func() {
+				action := <-game.ActionsChan
+				action.Do(game)
+			}()
+			// var removedEntities []backend.Identifier
 
-			for id, entity := range game.Entities {
-				if player.ID() != id {
-					positionerEntity, _ := entity.(backend.Positioner)
-					collision := player.Collide(positionerEntity)
-					if collision {
-						switch entity.(type) {
-						case backend.Fooder:
-							game.Score[player.ID()] += entity.(backend.Fooder).FoodValue()
-							removedEntities = append(removedEntities, entity)
-						default:
-							player.CurrentPosition = player.PreviousPosition()
-						}
+			// for id, entity := range game.Entities {
+			// 	if player.ID() != id {
+			// 		positionerEntity, _ := entity.(backend.Positioner)
+			// 		collision := player.Collide(positionerEntity)
+			// 		if collision {
+			// 			switch entity.(type) {
+			// 			case backend.Fooder:
+			// 				game.Score[player.ID()] += entity.(backend.Fooder).FoodValue()
+			// 				removedEntities = append(removedEntities, entity)
+			// 			default:
+			// 				player.CurrentPosition = player.PreviousPosition()
+			// 			}
 
-					}
-				}
-			}
+			// 		}
+			// 	}
+			// }
 
-			for _, entity := range removedEntities {
-				delete(game.Entities, entity.ID())
-			}
+			// for _, entity := range removedEntities {
+			// 	delete(game.Entities, entity.ID())
+			// }
 		},
 
 		// RenderFunc accepts a function that contains rendering logic.
