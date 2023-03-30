@@ -75,6 +75,8 @@ func main() {
 					if currentPosition.X >= 2 {
 						moveAction = backend.MoveAction{ID: player.UUID, Direction: backend.Left}
 					}
+				default:
+					return false
 				}
 				go func(action backend.Action) {
 					game.ActionsChan <- moveAction

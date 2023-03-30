@@ -33,19 +33,19 @@ func (g *Game) Init() {
 	}
 }
 
-func (g *Game) getCollisionMap() map[Coordinates][]Identifier {
-	collisionMap := make(map[Coordinates][]Identifier)
+func (g *Game) getCollisionMap() map[Coordinates]Identifier {
+	collisionMap := make(map[Coordinates]Identifier)
 
 	for _, entity := range g.Entities {
 		positionerEntity, _ := entity.(Positioner)
-		collisionMap[positionerEntity.Position()] = append(collisionMap[positionerEntity.Position()], entity)
+		collisionMap[positionerEntity.Position()] = entity
 	}
 
 	return collisionMap
 }
 
-func (g *Game) getEntityMap(entityType EntityType) map[Coordinates][]Identifier {
-	entityMap := make(map[Coordinates][]Identifier)
+func (g *Game) getEntityMap(entityType EntityType) map[Coordinates]Identifier {
+	entityMap := make(map[Coordinates]Identifier)
 	var positionerEntity Positioner
 
 	for _, entity := range g.Entities {
@@ -55,15 +55,21 @@ func (g *Game) getEntityMap(entityType EntityType) map[Coordinates][]Identifier 
 			if !ok {
 				continue
 			}
-
 		case FoodEntity:
 			_, ok := entity.(Fooder)
 			if !ok {
 				continue
 			}
+
+		case ObstacleEntity:
+			_, ok := entity.(Fooder)
+			// food is also Positioner, but we want to allow move to it
+			if ok {
+				continue
+			}
 		}
 		positionerEntity, _ = entity.(Positioner)
-		entityMap[positionerEntity.Position()] = append(entityMap[positionerEntity.Position()], entity)
+		entityMap[positionerEntity.Position()] = entity
 	}
 
 	return entityMap

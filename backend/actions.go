@@ -46,17 +46,13 @@ type RemoveEntityAction struct {
 }
 
 type MoveAction struct {
-	ID uuid.UUID
-	Direction
+	ID        uuid.UUID
+	Direction Direction
+	Timestamp int64 // number of miliseconds since start of the current round
 }
 
 func (action MoveAction) Do(game *Game) {
 	entity, ok := game.Entities[action.ID]
-	if !ok {
-		return
-	}
-
-	positionerEntity, ok := entity.(Positioner)
 	if !ok {
 		return
 	}
@@ -66,9 +62,8 @@ func (action MoveAction) Do(game *Game) {
 		return
 	}
 
-	_ = moverEntity
-
-	position := positionerEntity.Position()
+	// if Mover, it has to be also Positioner, no need to check it
+	position := entity.(Positioner).Position()
 
 	switch action.Direction {
 	case Left:
@@ -81,11 +76,24 @@ func (action MoveAction) Do(game *Game) {
 		position.Y++
 	}
 
-	// obstaclesMap := game.getEntityMap(ObstacleEntity)
-	// obstacles := obstaclesMap[position]
-	// if len(obstacles) > 0 {
-	// 	return
-	// }
+	foodMap := game.getEntityMap(FoodEntity)
+	food, ok := foodMap[position]
+	if ok {
+		game.Score[action.ID] += food.(Fooder).FoodValue()
+		// remove food from the map
+		delete(game.Entities, food.ID())
+		// update map in clients - send action to remove food from map
+
+		moverEntity.Move(position)
+
+		return
+	}
+
+	obstaclesMap := game.getEntityMap(ObstacleEntity)
+	_, ok = obstaclesMap[position]
+	if ok {
+		return
+	}
 
 	moverEntity.Move(position)
 }
