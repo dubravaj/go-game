@@ -3,13 +3,14 @@ package backend
 import "github.com/google/uuid"
 
 type Food struct {
-	Identifier
-	Diplayer
-	Fooder
 	UUID            uuid.UUID
 	CurrentPosition Coordinates
 	Value           int
 	Icon            string
+}
+
+func New(position Coordinates, value int, icon string) Food {
+	return Food{UUID: uuid.New(), CurrentPosition: position, Value: value, Icon: icon}
 }
 
 func (f *Food) ID() uuid.UUID {

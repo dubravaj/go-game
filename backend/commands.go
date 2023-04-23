@@ -12,47 +12,50 @@ const (
 	Down
 )
 
-type Action interface {
-	Do(game *Game)
+type Command interface {
+	Execute(game *Game)
 }
 
-type AddPlayerAction struct {
+type AddPlayerCommand struct {
 	ID   uuid.UUID
 	Name string
 	Icon string
 }
 
-func (action AddPlayerAction) Do(game *Game) {
-	player := Player{UUID: action.ID, Icon: action.Icon, Name: action.Name}
+func (command AddPlayerCommand) Execute(game *Game) {
+	player := Player{UUID: command.ID, Icon: command.Icon, Name: command.Name}
 	player.CurrentPosition = game.generateRandomPosition()
 	game.Entities[player.ID()] = &player
 	game.Score[player.ID()] = 0
 }
 
-type AddFoodAction struct {
+type AddFoodCommand struct {
 	ID    uuid.UUID
 	Value int
 	Icon  string
 }
 
-func (action AddFoodAction) Do(game *Game) {
+func (command AddFoodCommand) Execute(game *Game) {
 	foodInitialPosition := game.generateRandomPosition()
-	food := Food{UUID: action.ID, CurrentPosition: foodInitialPosition, Icon: action.Icon, Value: action.Value}
-	game.Entities[action.ID] = &food
+	food := Food{UUID: command.ID, CurrentPosition: foodInitialPosition, Icon: command.Icon, Value: command.Value}
+	game.Entities[command.ID] = &food
 }
 
-type RemoveEntityAction struct {
+type RemoveEntityCommand struct {
 	ID uuid.UUID
 }
 
-type MoveAction struct {
+type MoveCommand struct {
 	ID        uuid.UUID
 	Direction Direction
 	Timestamp int64 // number of miliseconds since start of the current round
 }
 
-func (action MoveAction) Do(game *Game) {
-	entity, ok := game.Entities[action.ID]
+func (command MoveCommand) Execute(game *Game) {
+
+	//width, height := game.Map.Size()
+
+	entity, ok := game.Entities[command.ID]
 	if !ok {
 		return
 	}
@@ -65,7 +68,7 @@ func (action MoveAction) Do(game *Game) {
 	// if Mover, it has to be also Positioner, no need to check it
 	position := entity.(Positioner).Position()
 
-	switch action.Direction {
+	switch command.Direction {
 	case Left:
 		position.X--
 	case Right:
@@ -79,7 +82,7 @@ func (action MoveAction) Do(game *Game) {
 	foodMap := game.getEntityMap(FoodEntity)
 	food, ok := foodMap[position]
 	if ok {
-		game.Score[action.ID] += food.(Fooder).FoodValue()
+		game.Score[command.ID] += food.(Fooder).FoodValue()
 		// remove food from the map
 		delete(game.Entities, food.ID())
 		// update map in clients - send action to remove food from map
@@ -95,5 +98,7 @@ func (action MoveAction) Do(game *Game) {
 		return
 	}
 
+	//if position.Y-1 > MapHeightOffset || position.Y-1 < height-MoveOffet || position.X-1 < width-MoveOffet || position.X-1 >= MoveOffet {
 	moverEntity.Move(position)
+	//}
 }

@@ -4,9 +4,6 @@ import "github.com/google/uuid"
 
 // player object
 type Player struct {
-	Identifier
-	Mover
-	Diplayer
 	UUID            uuid.UUID
 	CurrentPosition Coordinates
 	PrevPosition    Coordinates

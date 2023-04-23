@@ -9,22 +9,32 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	MoveOffet       = 2
+	MapHeightOffset = 10
+	MapWidthOffset  = 2
+)
+
 type Game struct {
-	Entities    map[uuid.UUID]Identifier
-	Score       map[uuid.UUID]int
-	Map         tcell.Screen
-	ActionsChan chan Action
+	Entities     map[uuid.UUID]Identifier
+	Score        map[uuid.UUID]int
+	Map          tcell.Screen
+	CommandsChan chan Command
 }
 
-func NewGame() *Game {
-	gameMap, _ := tcell.NewScreen()
-	game := Game{
-		Entities:    make(map[uuid.UUID]Identifier),
-		Score:       make(map[uuid.UUID]int),
-		Map:         gameMap,
-		ActionsChan: make(chan Action),
+func NewGame() (*Game, error) {
+	gameMap, err := tcell.NewScreen()
+	if err != nil {
+		log.Fatal("Cannot initialize map.")
+		return nil, err
 	}
-	return &game
+	game := Game{
+		Entities:     make(map[uuid.UUID]Identifier),
+		Score:        make(map[uuid.UUID]int),
+		Map:          gameMap,
+		CommandsChan: make(chan Command, 20),
+	}
+	return &game, nil
 }
 
 func (g *Game) Init() {
@@ -81,8 +91,8 @@ func (g *Game) generateRandomPosition() Coordinates {
 
 	for {
 
-		x := rand.Intn(width-1) + 1
-		y := rand.Intn(height-10) + 10
+		x := rand.Intn(width-2) + 1
+		y := rand.Intn(height-12) + 11
 
 		randomPosition := Coordinates{X: x, Y: y}
 
@@ -90,6 +100,7 @@ func (g *Game) generateRandomPosition() Coordinates {
 			return randomPosition
 		}
 	}
+
 }
 
 func (g *Game) AddPlayer(p *Player) {
@@ -102,38 +113,14 @@ func (g *Game) AddEntity(e Identifier) {
 	g.Entities[e.ID()] = e
 }
 
-func (g *Game) InitMap() {
-	g.AddEntity(&Obstacle{UUID: uuid.New(), CurrentPosition: Coordinates{X: 10, Y: 20}, Icon: "A"})
-	g.AddEntity(&Obstacle{UUID: uuid.New(), CurrentPosition: Coordinates{X: 10, Y: 21}, Icon: "A"})
-	g.AddEntity(&Obstacle{UUID: uuid.New(), CurrentPosition: Coordinates{X: 29, Y: 25}, Icon: "A"})
-	g.AddEntity(&Obstacle{UUID: uuid.New(), CurrentPosition: Coordinates{X: 50, Y: 22}, Icon: "A"})
-}
-
-func (g *Game) watchActions() {
-	//
-}
-
 func (g *Game) GenerateFood() {
 	timer := time.NewTimer(5 * time.Second)
+	var initialPosition Coordinates
 	for {
 		<-timer.C
-		width, height := g.Map.Size()
-		y := rand.Intn(height)
-		if y < 10 {
-			y += 10
-		}
-		if y == height-1 {
-			y -= 10
-		}
-		x := rand.Intn(width)
-		if x == 0 {
-			x += 10
-		}
-		if x == width-1 {
-			x -= 10
-		}
+		initialPosition = g.generateRandomPosition()
 		//"⛄"
-		food := Food{UUID: uuid.New(), CurrentPosition: Coordinates{X: x, Y: y}, Value: 1, Icon: "X"}
+		food := Food{UUID: uuid.New(), CurrentPosition: initialPosition, Value: 1, Icon: "X"}
 		g.Entities[food.ID()] = &food
 		timer.Reset(5 * time.Second)
 	}
