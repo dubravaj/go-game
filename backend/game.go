@@ -104,7 +104,7 @@ func (g *Game) generateRandomPosition() Coordinates {
 }
 
 func (g *Game) AddPlayer(p *Player) {
-	p.CurrentPosition = g.generateRandomPosition()
+	p.CurrentPosition = Coordinates{X: 20, Y: 20}
 	g.Entities[p.ID()] = p
 	g.Score[p.ID()] = 0
 }

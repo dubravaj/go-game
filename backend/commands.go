@@ -1,6 +1,8 @@
 package backend
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type Direction int
 

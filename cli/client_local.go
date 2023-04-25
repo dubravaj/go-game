@@ -23,14 +23,14 @@ func (client *Client) Init() {
 	}
 	client.UIView = &frontend.UIView{}
 	game.Init()
-	client.UIView.Init()
 	client.game = game
 }
 
 func (client *Client) Run(player *backend.Player) {
 
 	game := client.game
-
+	client.UIView.Init(game, player)
+	client.UIView.Run()
 	config := gameloop.Config{
 
 		TargetFPS: 60,
@@ -42,15 +42,13 @@ func (client *Client) Run(player *backend.Player) {
 		},
 
 		ProcessInputFunc: func() bool {
-			// find out problem when this is running as goroutine
-
-			//frontend.HandleInput(game, player)
 			return false
 		},
 
 		UpdateFunc: func(dt float64) {
 
 			go func() {
+
 				command := <-game.CommandsChan
 				command.Execute(game)
 
@@ -59,8 +57,7 @@ func (client *Client) Run(player *backend.Player) {
 		},
 
 		RenderFunc: func() {
-
-			//frontend.Render(game)
+			client.UIView.Render()
 		},
 	}
 
